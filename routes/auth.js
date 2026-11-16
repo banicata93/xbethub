@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -13,6 +14,14 @@ const loginLimiter = rateLimit({
     legacyHeaders: false
 });
 
+function isLegacyPasswordValid(password, storedPassword) {
+    if (!storedPassword) return false;
+    if (storedPassword === password) return true;
+
+    const sha256 = crypto.createHash('sha256').update(password).digest('hex');
+    return storedPassword === sha256;
+}
+
 router.post('/login', loginLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -23,10 +32,20 @@ router.post('/login', loginLimiter, async (req, res) => {
         if (!admin) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
-        const isValid = await bcrypt.compare(password, admin.password);
+
+        const isValid =
+            await bcrypt.compare(password, admin.password) ||
+            isLegacyPasswordValid(password, admin.password);
+
         if (!isValid) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
+
+        if (!admin.password.startsWith('$2a$')) {
+            admin.password = password;
+            await admin.save();
+        }
+
         const token = jwt.sign({ id: admin._id }, process.env.JWT_SECRET, { expiresIn: '24h' });
         res.cookie('token', token, {
             httpOnly: true,
