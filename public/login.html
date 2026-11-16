@@ -41,63 +41,30 @@
     </div>
 
     <script>
-        // Check if already logged in
-        window.addEventListener('load', () => {
-            const token = localStorage.getItem('token');
-            if (token) {
-                checkAndRedirect(token);
-            }
-        });
-
-        // Function to check token and redirect
-        async function checkAndRedirect(token) {
-            try {
-                const response = await fetch('/admin', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                if (response.ok) {
-                    window.location.href = '/admin';
-                } else {
-                    localStorage.removeItem('token');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                localStorage.removeItem('token');
-            }
-        }
-
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
-            
+            const errorEl = document.getElementById('error-message');
+            errorEl.style.display = 'none';
+
             try {
-                const response = await fetch('/api/auth/login', {
+                const response = await fetch('api/auth/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ username, password })
                 });
-
                 const data = await response.json();
-                
                 if (response.ok) {
-                    // Store the token
-                    localStorage.setItem('token', data.token);
-                    // Try to access admin with the token
-                    await checkAndRedirect(data.token);
+                    window.location.href = 'admin';
                 } else {
-                    document.getElementById('error-message').textContent = data.message;
-                    document.getElementById('error-message').style.display = 'block';
+                    errorEl.textContent = data.message;
+                    errorEl.style.display = 'block';
                 }
             } catch (error) {
-                document.getElementById('error-message').textContent = 'An error occurred. Please try again.';
-                document.getElementById('error-message').style.display = 'block';
+                errorEl.textContent = 'An error occurred. Please try again.';
+                errorEl.style.display = 'block';
             }
         });
     </script>
