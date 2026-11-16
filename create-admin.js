@@ -8,7 +8,11 @@ async function createAdmin() {
         throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD must be set');
     }
 
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/xbethub';
+    const mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+        throw new Error('MONGODB_URI must be set to the application database');
+    }
+
     await mongoose.connect(mongoUri);
 
     const admin = await Admin.findOne({ username: ADMIN_USERNAME }) || new Admin({ username: ADMIN_USERNAME });
