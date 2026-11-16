@@ -1,21 +1,36 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 require('dotenv').config();
-const jwt = require('jsonwebtoken');
+
+// Проверка за задължителни env променливи
+if (!process.env.JWT_SECRET) {
+    console.error('FATAL: JWT_SECRET is not set in environment variables.');
+    process.exit(1);
+}
 
 const app = express();
+const APP_BASE_PATH = (process.env.APP_BASE_PATH || '').replace(/\/+$/, '');
+const withBase = (route) => `${APP_BASE_PATH}${route === '/' ? '' : route}`;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: process.env.CLIENT_ORIGIN || 'http://localhost:3000',
+    credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static('public'));
+
+if (APP_BASE_PATH) {
+    app.use(APP_BASE_PATH, express.static(path.join(__dirname, 'public')));
+}
 
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/xbethub';
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
@@ -31,34 +46,19 @@ mongoose.connect(MONGODB_URI, {
     console.error('MongoDB Connection Error:', err);
 });
 
-// Authentication middleware
-const auth = (req, res, next) => {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-        return res.status(401).json({ message: 'Authentication required' });
-    }
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded;
-        next();
-    } catch (error) {
-        return res.status(401).json({ message: 'Invalid token' });
-    }
+// Routes
+app.use(withBase('/api/predictions'), require('./routes/predictions'));
+app.use(withBase('/api/auth'), require('./routes/auth'));
+
+const sendPublicFile = (fileName) => (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', fileName));
 };
 
-// Routes
-app.use('/api/predictions', require('./routes/predictions'));
-app.use('/api/auth', require('./routes/auth'));
-
 // Serve static files
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get(withBase('/'), sendPublicFile('index.html'));
+app.get(withBase('/login'), sendPublicFile('login.html'));
+app.get(withBase('/admin'), sendPublicFile('admin.html'));
 
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
+app.get('/', sendPublicFile('index.html'));
+app.get('/login', sendPublicFile('login.html'));
+app.get('/admin', sendPublicFile('admin.html'));
