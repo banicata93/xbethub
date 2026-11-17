@@ -1,0 +1,676 @@
+diff --git a/public/admin.html b/public/admin.html
+index 11b1b31..789d36c 100644
+--- a/public/admin.html
++++ b/public/admin.html
+@@ -8,6 +8,7 @@
+     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+     <link href="css/style.css" rel="stylesheet">
++    <link href="/css/prediction-composer.css?v=1" rel="stylesheet">
+     <style>
+         :root {
+             --primary-color: #2c3e50;
+@@ -276,7 +277,7 @@
+             </div>
+ 
+             <!-- Add New Prediction Form -->
+-            <div class="card mb-4">
++            <div class="card mb-4" id="addPredictionCard">
+                 <div class="card-header bg-primary text-white">
+                     <h3 class="card-title mb-0">Add New Prediction</h3>
+                 </div>
+@@ -338,45 +339,66 @@
+                                 <input type="text" class="form-control" id="awayTeam" required placeholder="Enter away team name">
+                             </div>
+                             <div class="col-12 mb-3">
+-                                <label for="prediction" class="form-label">
+-                                    <i class="bi bi-lightning me-2"></i>Prediction
+-                                </label>
+-                                <div class="input-group">
+-                                    <input type="text" class="form-control" id="prediction" required placeholder="e.g., BTTS, Over 2.5, 1X2">
+-                                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+-                                        Quick Pick
+-                                    </button>
+-                                    <ul class="dropdown-menu dropdown-menu-end">
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('BTTS'); return false;">BTTS (Both Teams To Score)</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('Over 2.5'); return false;">Over 2.5 Goals</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('Over 1.5'); return false;">Over 1.5 Goals</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('Under 2.5'); return false;">Under 2.5 Goals</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('Home Win'); return false;">Home Win (1)</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('Draw'); return false;">Draw (X)</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('Away Win'); return false;">Away Win (2)</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('1X'); return false;">1X (Home or Draw)</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('X2'); return false;">X2 (Draw or Away)</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('12'); return false;">12 (Home or Away)</a></li>
+-                                        <li><hr class="dropdown-divider"></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('BTTS & Over 2.5'); return false;">BTTS & Over 2.5</a></li>
+-                                        <li><a class="dropdown-item" href="#" onclick="setPrediction('Home Win & Over 2.5'); return false;">Home Win & Over 2.5</a></li>
+-                                    </ul>
++                                <div class="prediction-composer" data-prediction-composer data-mode="combined">
++                                    <div class="prediction-composer-header">
++                                        <h4 class="prediction-title"><i class="bi bi-lightning me-2" aria-hidden="true"></i>Prediction</h4>
++                                        <div class="prediction-mode" role="group" aria-label="Начин на въвеждане">
++                                            <button type="button" data-prediction-mode="combined" aria-pressed="true">Бутони</button>
++                                            <button type="button" data-prediction-mode="manual" aria-pressed="false">Ръчно въвеждане</button>
++                                        </div>
++                                    </div>
++                                    <input type="hidden" id="prediction" name="prediction">
++                                    <div data-prediction-choices>
++                                        <div class="prediction-categories">
++                                            <fieldset>
++                                                <legend>Краен изход</legend>
++                                                <div class="prediction-options">
++                                                    <button type="button" data-prediction-category="outcome" data-prediction-value="1" aria-pressed="false">1</button>
++                                                    <button type="button" data-prediction-category="outcome" data-prediction-value="X" aria-pressed="false">X</button>
++                                                    <button type="button" data-prediction-category="outcome" data-prediction-value="2" aria-pressed="false">2</button>
++                                                    <button type="button" data-prediction-category="outcome" data-prediction-value="1X" aria-pressed="false">1X</button>
++                                                    <button type="button" data-prediction-category="outcome" data-prediction-value="X2" aria-pressed="false">X2</button>
++                                                    <button type="button" data-prediction-category="outcome" data-prediction-value="12" aria-pressed="false">12</button>
++                                                </div>
++                                            </fieldset>
++                                            <fieldset>
++                                                <legend>Голове</legend>
++                                                <div class="prediction-options prediction-options-goals">
++                                                    <button type="button" data-prediction-category="goals" data-prediction-value="Over 1.5" aria-pressed="false">Over 1.5</button>
++                                                    <button type="button" data-prediction-category="goals" data-prediction-value="Over 2.5" aria-pressed="false">Over 2.5</button>
++                                                    <button type="button" data-prediction-category="goals" data-prediction-value="Over 3.5" aria-pressed="false">Over 3.5</button>
++                                                    <button type="button" data-prediction-category="goals" data-prediction-value="Under 1.5" aria-pressed="false">Under 1.5</button>
++                                                    <button type="button" data-prediction-category="goals" data-prediction-value="Under 2.5" aria-pressed="false">Under 2.5</button>
++                                                    <button type="button" data-prediction-category="goals" data-prediction-value="Under 3.5" aria-pressed="false">Under 3.5</button>
++                                                </div>
++                                            </fieldset>
++                                            <fieldset>
++                                                <legend>BTTS</legend>
++                                                <div class="prediction-options prediction-options-btts">
++                                                    <button type="button" data-prediction-category="btts" data-prediction-value="BTTS Yes" aria-pressed="false">BTTS Yes</button>
++                                                    <button type="button" data-prediction-category="btts" data-prediction-value="BTTS No" aria-pressed="false">BTTS No</button>
++                                                </div>
++                                            </fieldset>
++                                        </div>
++                                        <p class="prediction-hint">По една опция от категория. Натисни избраната опция отново, за да я премахнеш.</p>
++                                    </div>
++                                    <div class="prediction-manual" data-prediction-manual hidden>
++                                        <label for="manualPrediction">Нестандартна прогноза</label>
++                                        <textarea class="form-control" id="manualPrediction" rows="2" maxlength="200" placeholder="Например: Точен резултат 2:1" aria-describedby="predictionPreview predictionError" disabled></textarea>
++                                    </div>
++                                    <div class="prediction-preview" role="status" aria-live="polite" aria-atomic="true">
++                                        <span class="prediction-preview-label">Готова прогноза</span>
++                                        <output id="predictionPreview">Избери поне една опция</output>
++                                    </div>
++                                    <p class="prediction-error" id="predictionError" role="alert" hidden></p>
+                                 </div>
+-                                <div class="form-text">Type or select from quick picks</div>
+-                            </div>
+-                            <div class="col-12 col-md-6 mb-3">
+-                                <label for="odds" class="form-label">
+-                                    <i class="bi bi-graph-up me-2"></i>Odds (Optional)
+-                                </label>
+-                                <input type="number" class="form-control" id="odds" step="0.01" min="1.01" max="100" placeholder="e.g., 1.85">
+-                                <div class="form-text">Enter betting odds (e.g., 1.85, 2.50)</div>
+                             </div>
+                         </div>
+-                        <div class="d-flex justify-content-center gap-3 mt-4">
+-                            <button type="submit" class="btn btn-primary btn-lg px-5">
++                        <div class="prediction-form-actions">
++                            <button type="submit" class="btn btn-primary">
+                                 <i class="bi bi-plus-circle me-2"></i>Add Prediction
+                             </button>
+-                            <button type="button" class="btn btn-secondary btn-lg px-5" onclick="document.getElementById('predictionForm').reset()">
++                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('predictionForm').reset()">
+                                 <i class="bi bi-arrow-clockwise me-2"></i>Clear Form
+                             </button>
+                         </div>
+@@ -417,7 +439,8 @@
+     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+     <link rel="stylesheet" href="/css/toast.css?v=1762262334">
+     <script src="/js/toast.js?v=1762262334"></script>
+-    <script src="/js/admin.js?v=1762262334"></script>
++    <script src="/js/prediction-composer.js?v=1"></script>
++    <script src="/js/admin.js?v=prediction-composer-1"></script>
+     <script>
+         // NOTE: All helper functions are now in /js/admin.js as global functions:
+         // - setTodayDate(), setTomorrowDate(), setPrediction(), logout()
+diff --git a/public/js/admin.js b/public/js/admin.js
+index 54ad76b..fd3ca7a 100644
+--- a/public/js/admin.js
++++ b/public/js/admin.js
+@@ -2,7 +2,7 @@
+ window.token = null;
+ let token = null;
+ 
+-console.log('🚀 Admin.js loaded! Version: 1762262334 - CSP Fixed!');
++console.log('🚀 Admin.js loaded! Version: prediction-composer-1');
+ 
+ // Global helper functions for date and prediction buttons
+ window.setTodayDate = function() {
+@@ -25,7 +25,9 @@ window.setTomorrowDate = function() {
+ };
+ 
+ window.setPrediction = function(value) {
+-    document.getElementById('prediction').value = value;
++    const composer = window.PredictionComposer?.get(document.getElementById('predictionForm'));
++    if (composer) composer.setManualValue(value);
++    else document.getElementById('prediction').value = value;
+ };
+ 
+ window.logout = function() {
+@@ -56,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
+     window.setTodayDate();
+     
+     if (predictionForm) {
++        window.PredictionComposer.initialize(predictionForm);
+         predictionForm.addEventListener('submit', window.handleAddPrediction);
+     }
+     
+@@ -90,16 +93,16 @@ document.addEventListener('DOMContentLoaded', () => {
+ 
+ window.handleAddPrediction = async function(e) {
+     e.preventDefault();
++    const composer = window.PredictionComposer.get(e.target);
++    if (!composer || !composer.validate()) return;
+     
+     const matchDate = document.getElementById('matchDate').value;
+-    const oddsValue = document.getElementById('odds').value;
+     const formData = {
+         matchDate: matchDate,
+         homeTeam: document.getElementById('homeTeam').value,
+         awayTeam: document.getElementById('awayTeam').value,
+         leagueFlag: document.getElementById('leagueFlag').value.trim(),
+-        prediction: document.getElementById('prediction').value,
+-        odds: oddsValue ? parseFloat(oddsValue) : null
++        prediction: composer.getValue()
+     };
+ 
+     try {
+diff --git a/utils/validationSchemas.js b/utils/validationSchemas.js
+index 26dd37c..2944963 100644
+--- a/utils/validationSchemas.js
++++ b/utils/validationSchemas.js
+@@ -23,8 +23,8 @@ const predictionSchema = Joi.object({
+         'string.max': 'League flag must not exceed 16 characters',
+         'any.required': 'League flag is required'
+     }),
+-    prediction: Joi.string().min(2).max(200).required().messages({
+-        'string.min': 'Prediction must be at least 2 characters',
++    prediction: Joi.string().min(1).max(200).required().messages({
++        'string.min': 'Prediction must be at least 1 character',
+         'string.max': 'Prediction must not exceed 200 characters',
+         'any.required': 'Prediction is required'
+     }),
+@@ -76,7 +76,7 @@ const bulkPredictionSchema = Joi.object({
+             homeTeam: Joi.string().min(2).max(100).required(),
+             awayTeam: Joi.string().min(2).max(100).required(),
+             leagueFlag: Joi.string().max(16).optional().default('⚽'),
+-            prediction: Joi.string().min(2).max(200).required(),
++            prediction: Joi.string().min(1).max(200).required(),
+             odds: Joi.number().min(1.01).max(100).optional().allow(null),
+             result: Joi.string().valid('pending', 'win', 'loss', 'void').optional().default('pending'),
+             homeTeamFlag: Joi.string().max(16).optional().allow(''),
+diff --git a/public/css/prediction-composer.css b/public/css/prediction-composer.css
+new file mode 100644
+index 0000000..b7c682c
+--- /dev/null
++++ b/public/css/prediction-composer.css
+@@ -0,0 +1,84 @@
++/* Scoped to Add New Prediction; the League Flag menu keeps its existing styles. */
++#addPredictionCard .card-header .card-title { color: #f8fafc; }
++#predictionForm > .row > div > .form-label { color: #e2e8f0; }
++#predictionForm > .row > div > .form-text { color: #cbd5e1; }
++
++.prediction-composer {
++    padding: 1rem;
++    border: 1px solid rgba(255, 255, 255, 0.18);
++    border-radius: 12px;
++    background: rgba(15, 23, 42, 0.62);
++    color: #f8fafc;
++}
++
++.prediction-composer [hidden] { display: none !important; }
++.prediction-composer .prediction-composer-header {
++    display: flex;
++    align-items: center;
++    justify-content: space-between;
++    flex-wrap: wrap;
++    gap: 0.65rem;
++    margin-bottom: 0.85rem;
++}
++.prediction-composer .prediction-title { margin: 0; font-size: 1rem; font-weight: 600; }
++.prediction-composer .prediction-mode { display: flex; gap: 0.3rem; }
++.prediction-composer button {
++    border: 1px solid rgba(255, 255, 255, 0.25);
++    border-radius: 8px;
++    background: rgba(255, 255, 255, 0.04);
++    color: #f8fafc;
++    font: inherit;
++    font-size: 0.88rem;
++    font-weight: 500;
++    min-height: 44px;
++    padding: 0.45rem 0.55rem;
++    cursor: pointer;
++    transition: background-color 0.15s ease, border-color 0.15s ease;
++}
++.prediction-composer .prediction-mode button { min-height: 36px; padding: 0.35rem 0.7rem; }
++.prediction-composer button:hover { background: rgba(52, 152, 219, 0.22); border-color: #93c5fd; }
++.prediction-composer button[aria-pressed="true"] { background: #2563eb; border-color: #93c5fd; color: #fff; }
++.prediction-composer button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
++.prediction-composer .prediction-categories {
++    display: grid;
++    grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 0.85fr);
++    gap: 0.85rem;
++}
++.prediction-composer fieldset { margin: 0; padding: 0; min-width: 0; border: 0; }
++.prediction-composer legend { float: none; margin: 0 0 0.4rem; font-size: 0.85rem; font-weight: 600; color: #cbd5e1; }
++.prediction-composer .prediction-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; }
++.prediction-composer .prediction-options-btts { grid-template-columns: 1fr; }
++.prediction-composer .prediction-hint { margin: 0.65rem 0 0; color: #cbd5e1; font-size: 0.78rem; }
++.prediction-composer .prediction-manual label { display: block; margin-bottom: 0.4rem; font-size: 0.85rem; color: #e2e8f0; }
++.prediction-composer .prediction-manual textarea { padding: 0.6rem 0.75rem; font-size: 0.95rem; resize: vertical; }
++.prediction-composer .prediction-preview {
++    display: flex;
++    align-items: baseline;
++    flex-wrap: wrap;
++    gap: 0.35rem 0.75rem;
++    margin-top: 0.85rem;
++    padding: 0.65rem 0.75rem;
++    border-radius: 8px;
++    background: rgba(52, 152, 219, 0.12);
++}
++.prediction-composer .prediction-preview-label { font-size: 0.78rem; color: #cbd5e1; }
++.prediction-composer output { font-size: 0.95rem; font-weight: 600; color: #fff; overflow-wrap: anywhere; }
++.prediction-composer .prediction-error { margin: 0.55rem 0 0; color: #fecaca; font-size: 0.85rem; }
++#predictionForm .prediction-form-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
++#predictionForm .prediction-form-actions .btn { min-height: 44px; padding: 0.65rem 1.25rem; font-size: 0.95rem; }
++
++@media (max-width: 767px) {
++    .prediction-composer { padding: 0.75rem; }
++    .prediction-composer .prediction-categories { grid-template-columns: 1fr; gap: 0.8rem; }
++    .prediction-composer .prediction-options-btts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
++    .prediction-composer .prediction-preview { flex-direction: column; gap: 0.2rem; }
++}
++@media (max-width: 400px) {
++    .prediction-composer .prediction-options-goals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
++}
++@media (max-width: 575px) {
++    #predictionForm #matchDate { flex: 1 0 100%; width: 100%; margin-bottom: 0.5rem; border-radius: 10px; }
++    #predictionForm #matchDate ~ button { flex: 1 1 0; }
++    #predictionForm .prediction-form-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
++    #predictionForm .prediction-form-actions .btn { padding: 0.6rem 0.4rem; font-size: 0.8rem; }
++}
+diff --git a/public/js/prediction-composer.js b/public/js/prediction-composer.js
+new file mode 100644
+index 0000000..df7c69c
+--- /dev/null
++++ b/public/js/prediction-composer.js
+@@ -0,0 +1,122 @@
++(function(root, factory) {
++    const composer = factory();
++    if (typeof module === 'object' && module.exports) module.exports = composer;
++    else root.PredictionComposer = composer;
++})(typeof globalThis !== 'undefined' ? globalThis : this, function() {
++    'use strict';
++
++    const options = Object.freeze({
++        outcome: Object.freeze(['1', 'X', '2', '1X', 'X2', '12']),
++        goals: Object.freeze(['Over 1.5', 'Over 2.5', 'Over 3.5', 'Under 1.5', 'Under 2.5', 'Under 3.5']),
++        btts: Object.freeze(['BTTS Yes', 'BTTS No'])
++    });
++    const categories = Object.keys(options);
++    const controllers = new WeakMap();
++
++    function toggleSelection(selection, category, value) {
++        if (!Object.hasOwn(options, category) || !options[category].includes(value)) return selection;
++        return { ...selection, [category]: selection[category] === value ? null : value };
++    }
++
++    function compose(selection) {
++        return categories.map(category => selection[category])
++            .filter((value, index) => options[categories[index]].includes(value))
++            .join(' + ');
++    }
++
++    function initialize(form) {
++        if (!form) return null;
++        if (controllers.has(form)) return controllers.get(form);
++        const root = form.querySelector('[data-prediction-composer]');
++        if (!root) return null;
++
++        const field = form.querySelector('#prediction');
++        const manual = root.querySelector('#manualPrediction');
++        const manualPanel = root.querySelector('[data-prediction-manual]');
++        const choices = root.querySelector('[data-prediction-choices]');
++        const preview = root.querySelector('#predictionPreview');
++        const error = root.querySelector('#predictionError');
++        const optionButtons = Array.from(root.querySelectorAll('[data-prediction-category]'));
++        const modeButtons = Array.from(root.querySelectorAll('[data-prediction-mode]'));
++        let selection = {};
++        let mode = 'combined';
++
++        function getValue() {
++            return mode === 'manual' ? manual.value.trim() : compose(selection);
++        }
++
++        function update() {
++            const value = getValue();
++            field.value = value;
++            preview.textContent = value || (mode === 'manual' ? 'Въведи нестандартна прогноза' : 'Избери поне една опция');
++            root.dataset.mode = mode;
++            choices.hidden = mode !== 'combined';
++            manualPanel.hidden = mode !== 'manual';
++            manual.disabled = mode !== 'manual';
++            manual.required = mode === 'manual';
++            error.hidden = true;
++            error.textContent = '';
++            manual.removeAttribute('aria-invalid');
++            for (const button of optionButtons) {
++                button.setAttribute('aria-pressed', String(selection[button.dataset.predictionCategory] === button.dataset.predictionValue));
++            }
++            for (const button of modeButtons) {
++                button.setAttribute('aria-pressed', String(button.dataset.predictionMode === mode));
++            }
++        }
++
++        function validate() {
++            const value = getValue();
++            const message = !value ? 'Избери поне една опция или въведи прогноза ръчно.'
++                : value.length > 200 ? 'Прогнозата може да съдържа до 200 знака.' : '';
++            if (!message) return true;
++            error.textContent = message;
++            error.hidden = false;
++            if (mode === 'manual') {
++                manual.setAttribute('aria-invalid', 'true');
++                manual.focus();
++            } else {
++                optionButtons[0].focus();
++            }
++            return false;
++        }
++
++        function reset() {
++            selection = {};
++            mode = 'combined';
++            manual.value = '';
++            update();
++        }
++
++        root.addEventListener('click', event => {
++            const button = event.target.closest('button');
++            if (!button || !root.contains(button)) return;
++            if (button.dataset.predictionMode) {
++                mode = button.dataset.predictionMode === 'manual' ? 'manual' : 'combined';
++                update();
++                if (mode === 'manual') manual.focus();
++            } else if (mode === 'combined' && button.dataset.predictionCategory) {
++                selection = toggleSelection(selection, button.dataset.predictionCategory, button.dataset.predictionValue);
++                update();
++            }
++        });
++        manual.addEventListener('input', update);
++        form.addEventListener('reset', reset);
++
++        const controller = {
++            getValue,
++            validate,
++            reset,
++            setManualValue(value) {
++                manual.value = String(value ?? '');
++                mode = 'manual';
++                update();
++            }
++        };
++        controllers.set(form, controller);
++        update();
++        return controller;
++    }
++
++    return { options, toggleSelection, compose, initialize, get: form => controllers.get(form) };
++});
+diff --git a/test/prediction-composer.test.js b/test/prediction-composer.test.js
+new file mode 100644
+index 0000000..86e16dd
+--- /dev/null
++++ b/test/prediction-composer.test.js
+@@ -0,0 +1,216 @@
++'use strict';
++
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const test = require('node:test');
++const vm = require('node:vm');
++const composer = require('../public/js/prediction-composer');
++const schemas = require('../utils/validationSchemas');
++const mongoose = require('mongoose');
++const Prediction = require('../models/prediction');
++
++const root = path.join(__dirname, '..');
++const base = { matchDate: '2026-11-17', homeTeam: 'Alpha', awayTeam: 'Beta', leagueFlag: '🇧🇬' };
++const values = [];
++for (const outcome of [null, ...composer.options.outcome]) {
++    for (const goals of [null, ...composer.options.goals]) {
++        for (const btts of [null, ...composer.options.btts]) {
++            if (outcome || goals || btts) values.push({ outcome, goals, btts });
++        }
++    }
++}
++
++test('contains exactly the requested options and all 146 nonempty combinations', () => {
++    assert.deepEqual(composer.options, {
++        outcome: ['1', 'X', '2', '1X', 'X2', '12'],
++        goals: ['Over 1.5', 'Over 2.5', 'Over 3.5', 'Under 1.5', 'Under 2.5', 'Under 3.5'],
++        btts: ['BTTS Yes', 'BTTS No']
++    });
++    assert.equal(values.length, 146);
++    for (const selection of values) {
++        assert.equal(composer.compose(selection), [selection.outcome, selection.goals, selection.btts].filter(Boolean).join(' + '));
++    }
++});
++
++test('replaces one category at a time and toggles the selected option off', () => {
++    let selection = {};
++    selection = composer.toggleSelection(selection, 'outcome', '1');
++    selection = composer.toggleSelection(selection, 'goals', 'Over 2.5');
++    selection = composer.toggleSelection(selection, 'btts', 'BTTS Yes');
++    selection = composer.toggleSelection(selection, 'outcome', '2');
++    assert.equal(composer.compose(selection), '2 + Over 2.5 + BTTS Yes');
++    selection = composer.toggleSelection(selection, 'goals', 'Over 2.5');
++    assert.equal(composer.compose(selection), '2 + BTTS Yes');
++    selection = composer.toggleSelection(selection, 'btts', 'BTTS No');
++    assert.equal(composer.compose(selection), '2 + BTTS No');
++    assert.equal(composer.toggleSelection(selection, 'unknown', '1'), selection);
++    assert.equal(composer.toggleSelection(selection, 'outcome', 'invalid'), selection);
++});
++
++test('accepts every single and combined prediction without odds in the real API schema and model', () => {
++    assert.equal(mongoose.connection.readyState, 0);
++    for (const selection of values) {
++        const text = composer.compose(selection);
++        const { error, value } = schemas.predictionSchema.validate({ ...base, prediction: text });
++        assert.equal(error, undefined);
++        assert.equal(value.prediction, text);
++        assert.equal(Object.hasOwn(value, 'odds'), false);
++        const document = new Prediction(value);
++        assert.equal(document.validateSync(), undefined);
++        assert.equal(document.prediction, text);
++        assert.equal(document.odds, null);
++    }
++    assert.equal(mongoose.connection.readyState, 0);
++});
++
++test('retains custom text and existing odds, while rejecting empty or oversized new predictions', () => {
++    const custom = 'Точен резултат 2:1 и гол след почивката';
++    const valid = schemas.predictionSchema.validate({ ...base, prediction: custom, odds: 2.4 });
++    assert.equal(valid.error, undefined);
++    const existing = new Prediction(valid.value);
++    existing.prediction = '1 + Over 2.5';
++    assert.equal(existing.validateSync(), undefined);
++    assert.equal(existing.odds, 2.4);
++    assert.ok(schemas.predictionSchema.validate({ ...base, prediction: '' }).error);
++    assert.ok(schemas.predictionSchema.validate({ ...base, prediction: 'a'.repeat(201) }).error);
++    assert.ok(schemas.predictionSchema.validate({ ...base, prediction: '1', odds: 0 }).error);
++    assert.equal(schemas.bulkPredictionSchema.validate({ predictions: [{ ...base, prediction: 'X' }] }).error, undefined);
++});
++
++function routeHandlers() {
++    const handlers = {};
++    const saved = [];
++    const router = {};
++    for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
++        router[method] = (route, ...callbacks) => { handlers[method + ' ' + route] = callbacks.at(-1); };
++    }
++    class MemoryPrediction {
++        constructor(value) { this.document = new Prediction(value); }
++        async save() {
++            const error = this.document.validateSync();
++            if (error) throw error;
++            const value = this.document.toObject();
++            saved.push(value);
++            return value;
++        }
++        static async findByIdAndUpdate(id, update) { return { _id: id, ...update }; }
++    }
++    const modules = {
++        express: { Router: () => router },
++        '../models/prediction': MemoryPrediction,
++        '../middleware/auth': () => {},
++        '../utils/validationSchemas': schemas,
++        '../utils/cache': { cacheMiddleware: () => () => {}, invalidateCache: () => {} }
++    };
++    const context = {
++        module: { exports: {} },
++        require(name) { if (!Object.hasOwn(modules, name)) throw new Error('Unexpected module'); return modules[name]; },
++        console: { error: () => {} }
++    };
++    vm.runInNewContext(fs.readFileSync(path.join(root, 'routes/predictions.js'), 'utf8'), context);
++    return { handlers, saved };
++}
++
++function response() {
++    return { code: 200, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
++}
++
++test('the existing POST handler saves new predictions without odds and PUT preserves legacy odds', async () => {
++    const { handlers, saved } = routeHandlers();
++    for (const prediction of ['1', 'X', '2', '1 + Over 3.5', 'Over 2.5 + BTTS Yes']) {
++        const res = response();
++        await handlers['post /']({ body: { ...base, prediction } }, res);
++        assert.equal(res.code, 201);
++        assert.equal(res.body.prediction, prediction);
++        assert.equal(res.body.odds, null);
++    }
++    assert.equal(saved.length, 5);
++    const res = response();
++    await handlers['put /:id']({ params: { id: 'existing' }, body: { ...base, prediction: 'Custom legacy tip', odds: 2.4, result: 'win' } }, res);
++    assert.equal(res.code, 200);
++    assert.equal(res.body.odds, 2.4);
++    assert.equal(res.body.result, 'win');
++});
++
++test('the unchanged public renderer displays every new combination and legacy text', () => {
++    const body = { innerHTML: '' };
++    const context = vm.createContext({
++        document: { getElementById: () => body, addEventListener: () => {} },
++        window: {}, console: { error: () => {} }
++    });
++    vm.runInContext(fs.readFileSync(path.join(root, 'public/js/main.js'), 'utf8'), context);
++    const predictions = values.map(selection => ({ ...base, prediction: composer.compose(selection) }));
++    predictions.push({ ...base, prediction: 'Legacy custom tip', odds: 2.4, result: 'win' });
++    context.window.renderPredictions(predictions);
++    assert.equal((body.innerHTML.match(/class="prediction-cell"/g) || []).length, 147);
++    for (const prediction of predictions) assert.ok(body.innerHTML.includes('<strong>' + prediction.prediction + '</strong>'));
++});
++
++test('League Flag retains its exact original markup and date/team inputs retain their attributes', () => {
++    const html = fs.readFileSync(path.join(root, 'public/admin.html'), 'utf8');
++    const originalFlag = fs.readFileSync(path.join(__dirname, 'fixtures/league-flag-select.html'), 'utf8').trim();
++    assert.equal(html.match(/<select\b[^>]*id="leagueFlag"[\s\S]*?<\/select>/)[0], originalFlag);
++    assert.match(html, /<input type="date" class="form-control" id="matchDate" required>/);
++    assert.match(html, /onclick="setTodayDate\(\)"/);
++    assert.match(html, /onclick="setTomorrowDate\(\)"/);
++    for (const id of ['homeTeam', 'awayTeam']) assert.match(html, new RegExp('<input type="text" class="form-control" id="' + id + '" required'));
++    const form = html.match(/<form id="predictionForm">[\s\S]*?<\/form>/)[0];
++    assert.doesNotMatch(form, /\bodds\b|Odds/);
++    const style = fs.readFileSync(path.join(root, 'public/css/prediction-composer.css'), 'utf8');
++    assert.doesNotMatch(style, /#leagueFlag|\.form-select/);
++});
++
++async function statsFor(records) {
++    function matches(record, query) {
++        if (query.matchDate?.$gte && new Date(record.matchDate) < query.matchDate.$gte) return false;
++        if (typeof query.result === 'string' && record.result !== query.result) return false;
++        if (query.result?.$in && !query.result.$in.includes(record.result)) return false;
++        return true;
++    }
++    const model = {
++        countDocuments: async query => records.filter(record => matches(record, query || {})).length,
++        find(query) { return { sort() { return { limit(limit) { return { select: async () => records.filter(record => matches(record, query)).slice(0, limit) }; } }; } }; },
++        aggregate: async pipeline => {
++            const odds = records.filter(record => matches(record, pipeline[0].$match))
++                .map(record => record.odds).filter(value => typeof value === 'number');
++            return odds.length ? [{ avgOdds: odds.reduce((a, b) => a + b, 0) / odds.length }] : [];
++        }
++    };
++    const context = {
++        module: { exports: {} },
++        Date: class extends Date {
++            constructor(...args) { super(...(args.length ? args : ['2026-11-17T12:00:00Z'])); }
++        },
++        require(name) {
++            if (name === 'mongoose') return { connect: async () => ({}), connection: {} };
++            if (name === '../models/prediction') return model;
++            throw new Error('Unexpected module');
++        },
++        process: { env: { MONGODB_URI: 'offline-fixture' } },
++        console: { log: () => {}, error: () => {} }
++    };
++    vm.runInNewContext(fs.readFileSync(path.join(root, 'functions/stats.js'), 'utf8'), context);
++    const res = response();
++    res.setHeader = () => {};
++    await context.module.exports({ method: 'GET' }, res);
++    assert.equal(res.code, 200);
++    return res.body;
++}
++
++test('statistics count results, preserve legacy odds and ignore new null odds in the average', async () => {
++    const old = [
++        { ...base, prediction: 'Legacy win', result: 'win', odds: 2 },
++        { ...base, prediction: 'Legacy loss', result: 'loss', odds: 3 }
++    ];
++    const before = await statsFor(old);
++    const after = await statsFor([...old, { ...base, prediction: '1 + Over 2.5 + BTTS Yes', result: 'pending', odds: null }]);
++    assert.equal(after.overall.total, before.overall.total + 1);
++    assert.equal(after.overall.wins, before.overall.wins);
++    assert.equal(after.overall.losses, before.overall.losses);
++    assert.equal(after.overall.pending, before.overall.pending + 1);
++    assert.equal(after.overall.winRate, before.overall.winRate);
++    assert.equal(after.avgOdds, before.avgOdds);
++    assert.equal(after.avgOdds, 2.5);
++    assert.equal(mongoose.connection.readyState, 0);
++});
+diff --git a/test/fixtures/league-flag-select.html b/test/fixtures/league-flag-select.html
+new file mode 100644
+index 0000000..6e83087
+--- /dev/null
++++ b/test/fixtures/league-flag-select.html
+@@ -0,0 +1,22 @@
++<select class="form-select" id="leagueFlag" required>
++                                    <option value="">Select Country/League</option>
++                                    <option value="🇪🇺">🇪🇺 Europe (Champions League, Europa League)</option>
++                                    <option value="🇬🇧">🇬🇧 England (Premier League)</option>
++                                    <option value="🇪🇸">🇪🇸 Spain (La Liga)</option>
++                                    <option value="🇮🇹">🇮🇹 Italy (Serie A)</option>
++                                    <option value="🇩🇪">🇩🇪 Germany (Bundesliga)</option>
++                                    <option value="🇫🇷">🇫🇷 France (Ligue 1)</option>
++                                    <option value="🇵🇹">🇵🇹 Portugal (Primeira Liga)</option>
++                                    <option value="🇳🇱">🇳🇱 Netherlands (Eredivisie)</option>
++                                    <option value="🇧🇪">🇧🇪 Belgium (Pro League)</option>
++                                    <option value="🇹🇷">🇹🇷 Turkey (Süper Lig)</option>
++                                    <option value="🇬🇷">🇬🇷 Greece (Super League)</option>
++                                    <option value="🇧🇬">🇧🇬 Bulgaria (First League)</option>
++                                    <option value="🇷🇸">🇷🇸 Serbia (SuperLiga)</option>
++                                    <option value="🇭🇷">🇭🇷 Croatia (HNL)</option>
++                                    <option value="🇦🇷">🇦🇷 Argentina (Primera División)</option>
++                                    <option value="🇧🇷">🇧🇷 Brazil (Brasileirão)</option>
++                                    <option value="🇺🇸">🇺🇸 USA (MLS)</option>
++                                    <option value="🇲🇽">🇲🇽 Mexico (Liga MX)</option>
++                                    <option value="⚽">⚽ Other</option>
++                                </select>
