@@ -1,0 +1,786 @@
+diff --git a/functions/stats.js b/functions/stats.js
+index cef8b2c..7866b52 100644
+--- a/functions/stats.js
++++ b/functions/stats.js
+@@ -1,172 +1,24 @@
+-const mongoose = require('mongoose');
+-const Prediction = require('../models/prediction');
+-
+-// MongoDB connection
+-let cachedDb = null;
+-
+-async function connectToDatabase() {
+-    if (cachedDb) {
+-        return cachedDb;
+-    }
+-
+-    if (!process.env.MONGODB_URI) {
+-        throw new Error('MONGODB_URI is not set in environment variables');
+-    }
++'use strict';
+ 
+-    try {
+-        await mongoose.connect(process.env.MONGODB_URI, {
+-            useNewUrlParser: true,
+-            useUnifiedTopology: true,
+-        });
+-        cachedDb = mongoose.connection;
+-        console.log('MongoDB Connected Successfully');
+-        return cachedDb;
+-    } catch (error) {
+-        console.error('MongoDB Connection Error:', error);
+-        throw error;
+-    }
+-}
++const Prediction = require('../models/prediction');
++const { buildStatsPipeline, formatStats } = require('../utils/predictionStats');
+ 
++// server.js provides the same database connection used by prediction editing.
++// This handler neither opens another connection nor writes to the database.
+ module.exports = async (req, res) => {
+-    // Set CORS headers
+-    res.setHeader('Access-Control-Allow-Origin', '*');
+-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+-
+-    if (req.method === 'OPTIONS') {
+-        res.status(200).end();
+-        return;
++    res.setHeader('Cache-Control', 'no-store');
++    if (req.method !== 'GET' && req.method !== 'HEAD') {
++        res.setHeader('Allow', 'GET, HEAD');
++        return res.status(405).json({ message: 'Method not allowed' });
+     }
+ 
+     try {
+-        await connectToDatabase();
+-
+-        if (req.method === 'GET') {
+-            try {
+-                // OVERALL STATS (всички прогнози)
+-                const totalAll = await Prediction.countDocuments();
+-                
+-                const winsAll = await Prediction.countDocuments({ result: 'win' });
+-                const lossesAll = await Prediction.countDocuments({ result: 'loss' });
+-                const pendingAll = await Prediction.countDocuments({ result: 'pending' });
+-                const voidsAll = await Prediction.countDocuments({ result: 'void' });
+-                
+-                // Overall Win Rate (от всички завършени прогнози)
+-                const completedAll = winsAll + lossesAll;
+-                const winRateAll = completedAll > 0 ? ((winsAll / completedAll) * 100).toFixed(1) : 0;
+-
+-                // LAST 24 HOURS STATS
+-                const yesterday = new Date();
+-                yesterday.setHours(yesterday.getHours() - 24);
+-
+-                const last24HoursFilter = {
+-                    matchDate: { $gte: yesterday }
+-                };
+-
+-                const total = await Prediction.countDocuments(last24HoursFilter);
+-
+-                const wins = await Prediction.countDocuments({
+-                    ...last24HoursFilter,
+-                    result: 'win'
+-                });
+-                const losses = await Prediction.countDocuments({
+-                    ...last24HoursFilter,
+-                    result: 'loss'
+-                });
+-                const pending = await Prediction.countDocuments({
+-                    ...last24HoursFilter,
+-                    result: 'pending'
+-                });
+-                const voids = await Prediction.countDocuments({
+-                    ...last24HoursFilter,
+-                    result: 'void'
+-                });
+-
+-                // Win rate за последните 24ч
+-                const completed = wins + losses;
+-                const winRate = completed > 0 ? ((wins / completed) * 100).toFixed(1) : 0;
+-
+-                // Последните 10 прогнози за streak (само за последните 24ч)
+-                const recentPredictions = await Prediction.find({
+-                    ...last24HoursFilter,
+-                    result: { $in: ['win', 'loss'] }
+-                })
+-                .sort({ matchDate: -1 })
+-                .limit(10)
+-                .select('result');
+-
+-                // Изчисляване на текуща серия
+-                let currentStreak = 0;
+-                let streakType = null;
+-
+-                for (const pred of recentPredictions) {
+-                    if (streakType === null) {
+-                        streakType = pred.result;
+-                        currentStreak = 1;
+-                    } else if (pred.result === streakType) {
+-                        currentStreak++;
+-                    } else {
+-                        break;
+-                    }
+-                }
+-
+-                // Средни коефициенти (само за последните 24ч)
+-                const avgOddsResult = await Prediction.aggregate([
+-                    { $match: {
+-                        matchDate: { $gte: yesterday },
+-                        odds: { $ne: null }
+-                    }},
+-                    { $group: { _id: null, avgOdds: { $avg: '$odds' } } }
+-                ]);
+-
+-                const avgOdds = avgOddsResult.length > 0
+-                    ? avgOddsResult[0].avgOdds.toFixed(2)
+-                    : 0;
+-
+-                res.json({
+-                    // Overall stats (всички прогнози)
+-                    overall: {
+-                        total: totalAll,
+-                        wins: winsAll,
+-                        losses: lossesAll,
+-                        pending: pendingAll,
+-                        voids: voidsAll,
+-                        completed: completedAll,
+-                        winRate: parseFloat(winRateAll)
+-                    },
+-                    // Last 24 hours stats
+-                    last24hours: {
+-                        total,
+-                        wins,
+-                        losses,
+-                        pending,
+-                        voids,
+-                        completed,
+-                        winRate: parseFloat(winRate)
+-                    },
+-                    // Legacy fields (за обратна съвместимост)
+-                    total: totalAll,
+-                    wins: winsAll,
+-                    losses: lossesAll,
+-                    pending: pendingAll,
+-                    voids: voidsAll,
+-                    completed: completedAll,
+-                    winRate: parseFloat(winRateAll),
+-                    streak: {
+-                        count: currentStreak,
+-                        type: streakType
+-                    },
+-                    avgOdds: parseFloat(avgOdds)
+-                });
+-            } catch (error) {
+-                console.error('Error fetching stats:', error);
+-                res.status(500).json({ message: 'Server error' });
+-            }
+-        } else {
+-            res.status(405).json({ message: 'Method not allowed' });
+-        }
+-    } catch (error) {
+-        console.error('API Error:', error);
+-        res.status(500).json({ message: 'Server error' });
++        const now = new Date();
++        const [aggregate] = await Prediction.aggregate(buildStatsPipeline(now)).option({ maxTimeMS: 10000 });
++        return res.json(formatStats(aggregate, now));
++    } catch (_) {
++        // Never expose database details or replace a failed request with zeros.
++        console.error('Public prediction statistics could not be loaded');
++        return res.status(503).json({ message: 'Statistics are temporarily unavailable' });
+     }
+ };
+diff --git a/public/js/stats.js b/public/js/stats.js
+index 1186fd7..a8b7afe 100644
+--- a/public/js/stats.js
++++ b/public/js/stats.js
+@@ -1,31 +1,65 @@
+-// Зареждане на статистика
+-async function loadStats() {
+-    try {
+-        const response = await fetch('/api/stats');
+-        const stats = await response.json();
+-        
+-        // Update stats display
+-        document.getElementById('total-predictions').textContent = stats.count || 0;
+-        document.getElementById('win-rate').textContent = `${stats.winRate || 0}%`;
+-        document.getElementById('total-wins').textContent = stats.wins || 0;
+-        
+-        // Update header win rate if element exists
+-        const headerWinRate = document.querySelector('.stats-text strong');
+-        if (headerWinRate && stats.winRate) {
+-            headerWinRate.textContent = `${stats.winRate}%`;
+-        }
+-        
+-        if (stats.streak.count > 0) {
+-            const streakIcon = stats.streak.type === 'win' ? '🔥' : '❄️';
+-            document.getElementById('currentStreak').textContent = 
+-                `${streakIcon} ${stats.streak.count} ${stats.streak.type}s`;
+-        } else {
+-            document.getElementById('currentStreak').textContent = '--';
++'use strict';
++
++(() => {
++    let statistics = null;
++    let loading = false;
++    const field = id => document.getElementById(id);
++    const setText = (id, value) => { const element = field(id); if (element) element.textContent = value; };
++    const rate = value => value === null ? '—' : `${value.toFixed(1)}%`;
++
++    function validSummary(summary) {
++        if (!summary || typeof summary !== 'object') return false;
++        const { total, wins, losses, pending, voids, completed, winRate } = summary;
++        if (![total, wins, losses, pending, voids, completed].every(value => Number.isSafeInteger(value) && value >= 0)) return false;
++        if (total !== wins + losses + pending + voids || completed !== wins + losses) return false;
++        return completed === 0
++            ? winRate === null
++            : typeof winRate === 'number' && Number.isFinite(winRate) && winRate === Number((wins / completed * 100).toFixed(1));
++    }
++
++    function render() {
++        if (!statistics) return;
++        const selected = field('stats-period')?.value === 'last30days' ? 'last30days' : 'overall';
++        const summary = statistics[selected];
++        setText('header-win-rate', rate(statistics.overall.winRate));
++        for (const key of ['total', 'wins', 'losses', 'pending', 'voids']) setText(`stats-${key}`, summary[key].toLocaleString('en-GB'));
++        setText('stats-win-rate', rate(summary.winRate));
++        setText('stats-status', summary.total === 0
++            ? 'No predictions in this period.'
++            : summary.completed === 0
++                ? 'No settled predictions yet.'
++                : `Based on ${summary.completed.toLocaleString('en-GB')} settled prediction${summary.completed === 1 ? '' : 's'} (wins + losses).`);
++    }
++
++    async function loadStats() {
++        if (loading) return;
++        loading = true;
++        statistics = null;
++        const panel = field('prediction-stats');
++        const retry = field('stats-retry');
++        panel?.setAttribute('aria-busy', 'true');
++        if (retry) retry.hidden = true;
++        for (const id of ['header-win-rate', 'stats-total', 'stats-wins', 'stats-losses', 'stats-pending', 'stats-voids', 'stats-win-rate']) setText(id, '—');
++        setText('stats-status', 'Loading results…');
++        try {
++            const response = await fetch('/api/stats', { cache: 'no-store' });
++            if (!response.ok) throw new Error('Statistics request failed');
++            const data = await response.json();
++            if (!validSummary(data?.overall) || !validSummary(data?.last30days)) throw new Error('Invalid statistics response');
++            statistics = data;
++            render();
++        } catch (_) {
++            setText('stats-status', 'Statistics are temporarily unavailable. Please try again.');
++            if (retry) retry.hidden = false;
++        } finally {
++            panel?.setAttribute('aria-busy', 'false');
++            loading = false;
+         }
+-    } catch (error) {
+-        console.error('Error loading stats:', error);
+     }
+-}
+ 
+-// Зареди статистиката при зареждане на страницата
+-document.addEventListener('DOMContentLoaded', loadStats);
++    document.addEventListener('DOMContentLoaded', () => {
++        field('stats-period')?.addEventListener('change', render);
++        field('stats-retry')?.addEventListener('click', loadStats);
++        loadStats();
++    });
++})();
+diff --git a/server.js b/server.js
+index 2da676a..cc5dc1a 100644
+--- a/server.js
++++ b/server.js
+@@ -189,6 +189,7 @@ app.use('/api/predictions', predictionsRouter);
+ app.use('/api/match-of-the-day', matchOfTheDayRouter);
+ app.use('/api/auth', authRouter);
+ app.use('/api/health', healthRouter);
++app.all('/api/stats', require('./functions/stats'));
+ 
+ // Diagnostic endpoint - показва статуса на MongoDB връзката
+ app.get('/api/db-check', async (req, res) => {
+@@ -234,4 +235,4 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+ }
+ 
+ // For Vercel serverless
+-module.exports = app;
+\ No newline at end of file
++module.exports = app;
+diff --git a/test/prediction-composer.test.js b/test/prediction-composer.test.js
+index 2ba3e1d..7e7294c 100644
+--- a/test/prediction-composer.test.js
++++ b/test/prediction-composer.test.js
+@@ -193,20 +193,17 @@ test('League Flag retains its exact original markup and date/team inputs retain
+ });
+ 
+ async function statsFor(records) {
+-    function matches(record, query) {
+-        if (query.matchDate?.$gte && new Date(record.matchDate) < query.matchDate.$gte) return false;
+-        if (typeof query.result === 'string' && record.result !== query.result) return false;
+-        if (query.result?.$in && !query.result.$in.includes(record.result)) return false;
+-        return true;
+-    }
++    // These fixtures all have the same match date within the last 24 hours.
++    const odds = records.map(record => record.odds).filter(value => typeof value === 'number');
++    const grouped = [{
++        total: records.length,
++        wins: records.filter(record => record.result === 'win').length,
++        losses: records.filter(record => record.result === 'loss').length,
++        voids: records.filter(record => record.result === 'void').length,
++        avgOdds: odds.length ? odds.reduce((a, b) => a + b, 0) / odds.length : null
++    }];
+     const model = {
+-        countDocuments: async query => records.filter(record => matches(record, query || {})).length,
+-        find(query) { return { sort() { return { limit(limit) { return { select: async () => records.filter(record => matches(record, query)).slice(0, limit) }; } }; } }; },
+-        aggregate: async pipeline => {
+-            const odds = records.filter(record => matches(record, pipeline[0].$match))
+-                .map(record => record.odds).filter(value => typeof value === 'number');
+-            return odds.length ? [{ avgOdds: odds.reduce((a, b) => a + b, 0) / odds.length }] : [];
+-        }
++        aggregate: () => ({ option: async () => [{ overall: grouped, last30days: grouped, last24hours: grouped, recentResults: [] }] })
+     };
+     const context = {
+         module: { exports: {} },
+@@ -216,6 +213,7 @@ async function statsFor(records) {
+         require(name) {
+             if (name === 'mongoose') return { connect: async () => ({}), connection: {} };
+             if (name === '../models/prediction') return model;
++            if (name === '../utils/predictionStats') return require('../utils/predictionStats');
+             throw new Error('Unexpected module');
+         },
+         process: { env: { MONGODB_URI: 'offline-fixture' } },
+diff --git a/views/index.html b/views/index.html
+index 4bba434..afd776b 100644
+--- a/views/index.html
++++ b/views/index.html
+@@ -57,6 +57,7 @@
+     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+     <link href="/css/style.css?v=1.3" rel="stylesheet">
++    <link href="/css/prediction-stats.css?v=1.0" rel="stylesheet">
+     
+     <!-- Structured Data / Schema.org -->
+     <script type="application/ld+json">
+@@ -109,7 +110,7 @@
+                     <li class="nav-item">
+                         <span class="nav-stats">
+                             <i class="bi bi-trophy-fill"></i>
+-                            <span class="stats-text">Win Rate: <strong>87%</strong></span>
++                            <span class="stats-text" title="Wins divided by wins plus losses. Pending and void predictions are excluded.">All-time win rate: <strong id="header-win-rate">—</strong></span>
+                         </span>
+                     </li>
+                 </ul>
+@@ -159,6 +160,32 @@
+                         <h1 class="text-center mb-4">Today's Free Sports Betting Predictions</h1>
+                     </header>
+                     
++                    <section class="prediction-stats" id="prediction-stats" aria-labelledby="prediction-stats-heading" aria-busy="true">
++                        <div class="prediction-stats-heading">
++                            <h2 id="prediction-stats-heading">Prediction results</h2>
++                            <div class="prediction-stats-period">
++                                <label for="stats-period">Period</label>
++                                <select id="stats-period">
++                                    <option value="overall">All time</option>
++                                    <option value="last30days">Last 30 days</option>
++                                </select>
++                            </div>
++                        </div>
++                        <dl>
++                            <div><dt>Total predictions</dt><dd id="stats-total">—</dd></div>
++                            <div><dt>Win rate</dt><dd id="stats-win-rate">—</dd></div>
++                            <div><dt>Wins</dt><dd id="stats-wins">—</dd></div>
++                            <div><dt>Losses</dt><dd id="stats-losses">—</dd></div>
++                            <div><dt>Pending</dt><dd id="stats-pending">—</dd></div>
++                            <div><dt>Void</dt><dd id="stats-voids">—</dd></div>
++                        </dl>
++                        <p id="stats-status" class="prediction-stats-status" role="status" aria-live="polite">Loading results…</p>
++                        <button id="stats-retry" type="button" hidden>Try again</button>
++                        <p class="prediction-stats-note">Win rate = wins ÷ (wins + losses). Pending and void predictions are excluded. Match of the Day is tracked separately.</p>
++                        <p class="prediction-stats-note">Last 30 days uses match dates in UTC, up to now. Undated predictions appear in All time only.</p>
++                        <noscript><p class="prediction-stats-status">Enable JavaScript to load prediction statistics.</p></noscript>
++                    </section>
++
+                     <!-- Match of the Day Section -->
+                     <section class="match-of-the-day" aria-labelledby="motd-heading">
+                         <div class="motd-header">
+@@ -293,7 +320,7 @@
+     <link rel="stylesheet" href="/css/toast.css">
+     <script src="/js/toast.js"></script>
+     <script src="/js/analytics-tracker.js?v=1.0"></script>
+-    <script src="/js/stats.js?v=1.1"></script>
++    <script src="/js/stats.js?v=2.0"></script>
+     <script src="/js/match-of-the-day.js?v=1.0"></script>
+     <script src="/js/main.js?v=2.3"></script>
+     
+@@ -630,4 +657,4 @@
+     </script>
+     -->
+ </body>
+-</html> 
+\ No newline at end of file
++</html>
+diff --git a/utils/predictionStats.js b/utils/predictionStats.js
+new file mode 100644
+index 0000000..9beebf6
+--- /dev/null
++++ b/utils/predictionStats.js
+@@ -0,0 +1,74 @@
++'use strict';
++
++const DAY = 24 * 60 * 60 * 1000;
++
++function buildStatsPipeline(now) {
++    const dateOrNull = input => ({ $convert: { input, to: 'date', onError: null, onNull: null } });
++    const counts = () => ({ $group: {
++        _id: null,
++        total: { $sum: 1 },
++        wins: { $sum: { $cond: [{ $eq: ['$result', 'win'] }, 1, 0] } },
++        losses: { $sum: { $cond: [{ $eq: ['$result', 'loss'] }, 1, 0] } },
++        voids: { $sum: { $cond: [{ $eq: ['$result', 'void'] }, 1, 0] } },
++        // MongoDB ignores absent, null and nonnumeric odds in this average.
++        avgOdds: { $avg: '$odds' }
++    } });
++    const period = days => ({ $match: {
++        _statsDate: { $gte: new Date(now.getTime() - days * DAY), $lte: now }
++    } });
++
++    // Read-only aggregation: legacy bot dates work without migrating any records.
++    return [
++        { $project: {
++            result: 1, odds: 1, createdAt: 1,
++            _statsDate: { $ifNull: [dateOrNull('$matchDate'), dateOrNull('$date')] }
++        } },
++        { $facet: {
++            overall: [counts()],
++            last30days: [period(30), counts()],
++            last24hours: [period(1), counts()],
++            recentResults: [
++                period(1),
++                { $match: { result: { $in: ['win', 'loss'] } } },
++                { $sort: { _statsDate: -1, createdAt: -1, _id: -1 } },
++                { $limit: 10 },
++                { $project: { _id: 0, result: 1 } }
++            ]
++        } }
++    ];
++}
++
++function summarize(rows = []) {
++    const { total = 0, wins = 0, losses = 0, voids = 0 } = rows[0] || {};
++    const completed = wins + losses;
++    return {
++        total, wins, losses, voids,
++        // Missing or unrecognized legacy results are unresolved, never wins.
++        pending: total - wins - losses - voids,
++        completed,
++        winRate: completed > 0 ? Number((wins / completed * 100).toFixed(1)) : null
++    };
++}
++
++function formatStats(aggregate = {}, now) {
++    const overall = summarize(aggregate.overall);
++    const last30days = summarize(aggregate.last30days);
++    const last24hours = summarize(aggregate.last24hours);
++    const streak = { count: 0, type: null };
++    for (const prediction of aggregate.recentResults || []) {
++        if (streak.type !== null && prediction.result !== streak.type) break;
++        streak.type = prediction.result;
++        streak.count++;
++    }
++    const avgOdds = aggregate.last24hours?.[0]?.avgOdds;
++    return {
++        overall, last30days, last24hours,
++        // Preserve the existing API fields for callers outside the homepage.
++        ...overall,
++        streak,
++        avgOdds: typeof avgOdds === 'number' && Number.isFinite(avgOdds) ? Number(avgOdds.toFixed(2)) : 0,
++        generatedAt: now.toISOString()
++    };
++}
++
++module.exports = { buildStatsPipeline, formatStats };
+diff --git a/public/css/prediction-stats.css b/public/css/prediction-stats.css
+new file mode 100644
+index 0000000..a95f3be
+--- /dev/null
++++ b/public/css/prediction-stats.css
+@@ -0,0 +1,39 @@
++.prediction-stats {
++    margin: 0 0 1.25rem;
++    padding: 1rem;
++    border: 1px solid rgba(139, 92, 246, 0.3);
++    border-radius: 14px;
++    background: rgba(17, 15, 35, 0.88);
++    color: #e5e7eb;
++}
++.prediction-stats .prediction-stats-heading {
++    display: flex;
++    flex-wrap: wrap;
++    justify-content: space-between;
++    align-items: center;
++    gap: 0.65rem;
++    margin-bottom: 0.85rem;
++}
++.prediction-stats h2 { margin: 0; font-size: 1.05rem; color: #f3f4f6; }
++.prediction-stats .prediction-stats-period { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
++.prediction-stats select, .prediction-stats button {
++    padding: 0.4rem 0.55rem;
++    border: 1px solid rgba(167, 139, 250, 0.5);
++    border-radius: 7px;
++    background: #19152b;
++    color: #f3f4f6;
++    font: inherit;
++}
++.prediction-stats select:focus-visible, .prediction-stats button:focus-visible { outline: 2px solid #a78bfa; outline-offset: 3px; }
++.prediction-stats dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; margin: 0; }
++.prediction-stats dl > div { min-width: 0; padding: 0.5rem; background: rgba(139, 92, 246, 0.08); border-radius: 8px; }
++.prediction-stats dt { color: #c4b5d5; font-size: 0.78rem; font-weight: 400; }
++.prediction-stats dd { margin: 0.15rem 0 0; font-size: 1.25rem; line-height: 1.2; font-weight: 700; color: #f3f4f6; }
++.prediction-stats #stats-win-rate { color: #c4b5fd; }
++.prediction-stats .prediction-stats-status { margin: 0.75rem 0 0; font-size: 0.8rem; color: #e5e7eb; }
++.prediction-stats .prediction-stats-note { margin: 0.4rem 0 0; color: #b8aec8; font-size: 0.73rem; line-height: 1.5; }
++.prediction-stats #stats-retry { margin-top: 0.5rem; font-size: 0.8rem; cursor: pointer; }
++.prediction-stats [hidden] { display: none; }
++@media (max-width: 360px) {
++    .prediction-stats dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
++}
+diff --git a/test/prediction-stats.test.js b/test/prediction-stats.test.js
+new file mode 100644
+index 0000000..746cd9d
+--- /dev/null
++++ b/test/prediction-stats.test.js
+@@ -0,0 +1,232 @@
++'use strict';
++
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const test = require('node:test');
++const vm = require('node:vm');
++const express = require('express');
++const { buildStatsPipeline, formatStats } = require('../utils/predictionStats');
++const root = path.join(__dirname, '..');
++const now = new Date('2026-11-17T12:00:00Z');
++const groups = {
++    overall: [{ total: 12, wins: 4, losses: 2, voids: 3 }],
++    last30days: [{ total: 5, wins: 0, losses: 2, voids: 1 }],
++    last24hours: [{ total: 3, wins: 0, losses: 0, voids: 1, avgOdds: 2.456 }],
++    recentResults: [{ result: 'loss' }, { result: 'loss' }, { result: 'win' }]
++};
++const payload = () => formatStats(groups, now);
++
++test('win rate uses wins and losses only; unresolved and void records remain visible', () => {
++    const stats = payload();
++    assert.deepEqual(stats.overall, { total: 12, wins: 4, losses: 2, voids: 3, pending: 3, completed: 6, winRate: 66.7 });
++    assert.equal(stats.last30days.winRate, 0);
++    assert.equal(stats.last24hours.winRate, null);
++    assert.equal(stats.winRate, stats.overall.winRate);
++    assert.equal(stats.avgOdds, 2.46);
++    assert.deepEqual(stats.streak, { count: 2, type: 'loss' });
++});
++
++test('an empty database is distinct from zero wins, with no fabricated percentage', () => {
++    const stats = formatStats(undefined, now);
++    assert.equal(stats.overall.total, 0);
++    assert.equal(stats.overall.completed, 0);
++    assert.equal(stats.overall.winRate, null);
++    assert.equal(stats.last30days.winRate, null);
++    assert.deepEqual(stats.streak, { count: 0, type: null });
++});
++
++test('legacy records without a recognized result are treated as unresolved', () => {
++    const stats = formatStats({ overall: [{ total: 4, wins: 1, losses: 1, voids: 0 }] }, now);
++    assert.equal(stats.overall.pending, 2);
++    assert.equal(stats.overall.winRate, 50);
++});
++
++function handler(aggregate) {
++    const context = {
++        module: { exports: {} },
++        Date: class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } },
++        console: { error: () => {} },
++        require(name) {
++            if (name === '../models/prediction') return new Proxy({}, {
++                get(_, method) {
++                    assert.equal(method, 'aggregate', 'statistics must only use the read-only aggregate method');
++                    return pipeline => ({ option(options) {
++                        assert.equal(options.maxTimeMS, 10000);
++                        return aggregate(pipeline);
++                    } });
++                }
++            });
++            if (name === '../utils/predictionStats') return { buildStatsPipeline, formatStats };
++            throw new Error('Unexpected dependency: ' + name);
++        }
++    };
++    vm.runInNewContext(fs.readFileSync(path.join(root, 'functions/stats.js'), 'utf8'), context);
++    return context.module.exports;
++}
++
++function response() {
++    return {
++        code: 200, headers: {},
++        setHeader(name, value) { this.headers[name] = value; },
++        status(code) { this.code = code; return this; },
++        json(body) { this.body = body; return this; }
++    };
++}
++
++test('API returns only aggregated statistics and disables stale HTTP caching', async () => {
++    let reads = 0;
++    const run = handler(async () => { reads++; return [groups]; });
++    const res = response();
++    await run({ method: 'GET' }, res);
++    assert.equal(reads, 1);
++    assert.equal(res.code, 200);
++    assert.equal(res.headers['Cache-Control'], 'no-store');
++    assert.deepEqual(res.body, payload());
++});
++
++test('database failures return a generic error, never false zeros or database details', async () => {
++    const run = handler(async () => { throw new Error('Private connection detail'); });
++    const res = response();
++    await run({ method: 'GET' }, res);
++    assert.equal(res.code, 503);
++    assert.deepEqual(JSON.parse(JSON.stringify(res.body)), { message: 'Statistics are temporarily unavailable' });
++    assert.doesNotMatch(JSON.stringify(res.body), /Private|winRate|overall/);
++});
++
++test('write methods are rejected without reading or writing any data', async () => {
++    const run = handler(() => assert.fail('Unexpected database operation'));
++    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
++        const res = response();
++        await run({ method }, res);
++        assert.equal(res.code, 405);
++        assert.equal(res.headers.Allow, 'GET, HEAD');
++    }
++});
++
++test('the actual Express application serves /api/stats rather than its wildcard 404', async t => {
++    let connectionCalls = 0;
++    const statsHandler = handler(async () => [groups]);
++    const context = {
++        module: { exports: {} }, __dirname: root,
++        process: { env: { NODE_ENV: 'production', MONGODB_URI: 'offline-fixture' } },
++        console: { log: () => {}, error: () => {} },
++        require(name) {
++            if (name === 'dotenv') return { config() {} };
++            if (name === './utils/validateEnv') return () => {};
++            if (name === 'mongoose') return { connection: { readyState: 1 }, connect: async () => { connectionCalls++; } };
++            if (name === './functions/stats') return statsHandler;
++            if (name.startsWith('./routes/')) return express.Router();
++            if (name === './middleware/prerender') return (_, __, next) => next();
++            if (name.startsWith('.')) return require(path.resolve(root, name));
++            return require(name);
++        }
++    };
++    // dotenv is intercepted before the server can read any real credentials.
++    vm.runInNewContext(fs.readFileSync(path.join(root, 'server.js'), 'utf8'), context);
++    const server = context.module.exports.listen(0, '127.0.0.1');
++    await new Promise(resolve => server.once('listening', resolve));
++    t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
++    const url = `http://127.0.0.1:${server.address().port}/api/stats`;
++    const res = await fetch(url, { headers: { 'X-Forwarded-Proto': 'https' } });
++    assert.equal(res.status, 200);
++    assert.equal(res.headers.get('cache-control'), 'no-store');
++    assert.deepEqual(await res.json(), payload());
++    assert.equal(connectionCalls, 1, 'the existing shared connection middleware is used');
++    const head = await fetch(url, { method: 'HEAD', headers: { 'X-Forwarded-Proto': 'https' } });
++    assert.equal(head.status, 200);
++    assert.equal(await head.text(), '');
++    const denied = await fetch(url, { method: 'POST', headers: { 'X-Forwarded-Proto': 'https' } });
++    assert.equal(denied.status, 405);
++    const unknown = await fetch(url + '/unknown', { headers: { 'X-Forwarded-Proto': 'https' } });
++    assert.equal(unknown.status, 404);
++});
++
++async function browser(data = payload(), options = {}) {
++    const elements = {};
++    const ids = ['prediction-stats', 'header-win-rate', 'stats-period', 'stats-total', 'stats-wins', 'stats-losses', 'stats-pending', 'stats-voids', 'stats-win-rate', 'stats-status', 'stats-retry'];
++    if (!options.missingElements) for (const id of ids) elements[id] = {
++        textContent: '—', hidden: true, value: 'overall', listeners: {}, attributes: {},
++        addEventListener(event, callback) { this.listeners[event] = callback; },
++        setAttribute(name, value) { this.attributes[name] = value; }
++    };
++    const requests = [];
++    let ready;
++    let next = async () => ({ ok: true, json: async () => data, ...options.response });
++    const context = {
++        document: { getElementById: id => elements[id] || null, addEventListener: (_, callback) => { ready = callback; } },
++        fetch: async (...args) => { requests.push(args); return next(); }
++    };
++    vm.runInNewContext(fs.readFileSync(path.join(root, 'public/js/stats.js'), 'utf8'), context);
++    ready();
++    await new Promise(resolve => setImmediate(resolve));
++    return { elements, requests, setResponse(callback) { next = callback; } };
++}
++
++test('homepage renders real all-time figures, with sample size and no cached fetch', async () => {
++    const { elements: e, requests } = await browser();
++    assert.equal(e['header-win-rate'].textContent, '66.7%');
++    assert.equal(e['stats-total'].textContent, '12');
++    assert.equal(e['stats-wins'].textContent, '4');
++    assert.equal(e['stats-losses'].textContent, '2');
++    assert.equal(e['stats-pending'].textContent, '3');
++    assert.equal(e['stats-voids'].textContent, '3');
++    assert.match(e['stats-status'].textContent, /6 settled predictions/);
++    assert.equal(e['prediction-stats'].attributes['aria-busy'], 'false');
++    assert.equal(requests[0][0], '/api/stats');
++    assert.equal(requests[0][1].cache, 'no-store');
++});
++
++test('period switching shows a genuine 0% while the header remains explicitly all-time', async () => {
++    const { elements: e, requests } = await browser();
++    e['stats-period'].value = 'last30days';
++    e['stats-period'].listeners.change();
++    assert.equal(e['stats-win-rate'].textContent, '0.0%');
++    assert.equal(e['stats-total'].textContent, '5');
++    assert.equal(e['header-win-rate'].textContent, '66.7%');
++    assert.equal(requests.length, 1);
++});
++
++test('empty and unresolved-only histories have no claimed win rate', async () => {
++    for (const group of [[], [{ total: 3, wins: 0, losses: 0, voids: 1 }]]) {
++        const stats = formatStats({ overall: group, last30days: group }, now);
++        const { elements: e } = await browser(stats);
++        assert.equal(e['stats-win-rate'].textContent, '—');
++        assert.equal(e['header-win-rate'].textContent, '—');
++        assert.match(e['stats-status'].textContent, /No predictions|No settled predictions/);
++    }
++});
++
++test('HTTP failures, broken JSON and invalid counts never appear as real statistics', async () => {
++    const bad = payload();
++    bad.overall.pending = 999;
++    for (const [data, options] of [
++        [payload(), { response: { ok: false } }],
++        [payload(), { response: { json: async () => { throw new Error('Broken JSON'); } } }],
++        [bad, {}],
++        [null, {}]
++    ]) {
++        const { elements: e } = await browser(data, options);
++        assert.equal(e['header-win-rate'].textContent, '—');
++        assert.equal(e['stats-total'].textContent, '—');
++        assert.equal(e['stats-retry'].hidden, false);
++        assert.match(e['stats-status'].textContent, /temporarily unavailable/);
++    }
++});
++
++test('retry recovers from an outage and prevents overlapping requests', async () => {
++    const page = await browser(payload(), { response: { ok: false } });
++    let release;
++    page.setResponse(() => new Promise(resolve => { release = resolve; }));
++    const pending = page.elements['stats-retry'].listeners.click();
++    await page.elements['stats-retry'].listeners.click();
++    assert.equal(page.requests.length, 2);
++    release({ ok: true, json: async () => payload() });
++    await pending;
++    assert.equal(page.elements['stats-retry'].hidden, true);
++    assert.equal(page.elements['stats-win-rate'].textContent, '66.7%');
++});
++
++test('missing optional page elements cannot crash the statistics script', async () => {
++    await browser(payload(), { missingElements: true });
++});
